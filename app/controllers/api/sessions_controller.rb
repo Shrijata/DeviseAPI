@@ -1,49 +1,46 @@
-class Api::SessionsController < Devise::SessionsController
-  prepend_before_filter :require_no_authentication, :only => [:create ]
-  skip_before_filter :verify_authenticity_token 
-  before_filter :ensure_params_exist
- 
-  respond_to :json
+  class Api::SessionsController < Devise::SessionsController
   
-  def create
-    resource = User.find_for_database_authentication(:email=>params[:user][:email])
-    return invalid_login_attempt unless resource
+  include ApiHelper
+  
+  prepend_before_filter :require_no_authentication, :only => [:create]
+  skip_before_filter :verify_signed_out_user
+  before_action :authenticate_user!, :except => :create
 
+  include Devise::Controllers::Helpers
+
+  respond_to :json
+
+  def create
+    resource = User.find_for_database_authentication(:email => params[:user][:email])
+    return failure unless resource
     if resource.valid_password?(params[:user][:password])
-      sign_in("user", resource)
-      render :json=> {:success=>true, :auth_token=>resource.authentication_token,:email=>resource.email}
-      return
+    render :json=> {:success => true, :token => resource.authentication_token,:email => resource.email}
+    return
     end
-    invalid_login_attempt
+    failure
   end
-  
+
+  def new
+  super
+  end
+
+  def update
+    super
+  end
+
+  def edit
+  super
+  end
+
   def destroy
     current_user.reset_token!
-    signed_out = (Devise.sign_out_all_scopes ? sign_out : sign_out(resource_name))
-    render json: true
+    user=current_user
+    Devise.sign_out_all_scopes ? sign_out : sign_out(resource_name)
+    render json: {success:true, user:user.email}, status: 200
   end
 
-  protected
-  
-  def ensure_params_exist
-    return unless params[:user].blank?
-    render :json=>{:success=>false, :message=>"missing user parameter"}, :status=>422
+
+  def failure
+    return render :json => { :success => false}
   end
-
-  def invalid_login_attempt
-    warden.custom_failure!
-    render :json=> {:success=>false, :message=>"Error with your login or password"}, :status=>401
   end
-
-  def verify_signed_out_user
-    
-  end
-end
-
-
-
-
-
-
-
-
